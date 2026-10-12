@@ -27,6 +27,12 @@ base previas permanecen en los registros.
 
 ## Índice
 
+Segunda ronda de evaluación de Estuardo: [flujo en navegador y resultados](estuardo/ronda-2/README.md).
+Diagnóstico técnico: seis casos aprobados, uno fallido (INC-008) y uno bloqueado;
+no constituye UAT ni aceptación institucional.
+Primera ronda de evaluación de Estuardo: [guía, catálogo y evidencias](estuardo/README.md).
+Es un diagnóstico local complementario; no sustituye la aceptación institucional.
+
 | Archivo | Propósito | Responsable |
 | --- | --- | --- |
 | `alcance-y-decisiones.md` | Alcance, dependencias y decisiones que bloquean validación. | Pablo |
