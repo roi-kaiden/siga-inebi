@@ -192,6 +192,26 @@ describe("apiClient", () => {
     });
   });
 
+  test.each(["Failed to fetch", "NetworkError when attempting to fetch resource."])(
+    "explains a network failure in Spanish and permits a retry (%s)",
+    async (browserMessage) => {
+      globalThis.fetch = vi
+        .fn()
+        .mockRejectedValueOnce(new TypeError(browserMessage))
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({ final_grade: null }),
+        });
+
+      await expect(apiClient.get("/results/")).rejects.toThrow(
+        "No se pudo conectar con el servidor. Verifica tu conexión y vuelve a intentarlo."
+      );
+      await expect(apiClient.get("/results/")).resolves.toEqual({ final_grade: null });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    }
+  );
+
   test("sends FormData bodies as-is without a Content-Type header", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

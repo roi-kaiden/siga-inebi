@@ -28,9 +28,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.academics.models import CurriculumPlan, TeachingAssignment
+from apps.academics.services import close_academic_cycle
 from apps.enrolments.services import create_enrolment
 from apps.evaluation.models import CaptureExceptionGrant, EvaluationUnit, Grade, RecoveryGrade
-from apps.evaluation.services import register_unit_grade, set_recovery_window
+from apps.evaluation.services import close_evaluation_unit, register_unit_grade, set_recovery_window
 from apps.students.services import create_student_guardian_relation
 from tests.factories.academic import AcademicCycleFactory, SectionFactory, SubjectFactory
 from tests.factories.evaluation import EvaluationUnitFactory
@@ -1161,6 +1162,47 @@ class TestGradeCorrectionAPI:
             Grade.objects.get(enrolment=enrolment, subject=subject, evaluation_unit=unit).value
             == 70
         )
+
+    def test_closed_cycle_denies_grade_write_and_preserves_frozen_result(
+        self, auth_client, institution
+    ):
+        """CP-INT-EVA-001: a closed cycle keeps the grade and frozen result unchanged."""
+        from apps.academics.models import FrozenSubjectResult
+
+        cycle = AcademicCycleFactory(institution=institution)
+        unit = self._open_unit(cycle)
+        enrolment = self._enrolment(cycle)
+        subject = SubjectFactory(institution=institution)
+        teacher = auth_client.user.person
+        _grant_grade_write(
+            auth_client.user, section=enrolment.section, subject=subject, academic_cycle=cycle
+        )
+        CurriculumPlan.objects.create(
+            academic_cycle=cycle, grade=enrolment.grade, subject=subject
+        )
+        url = reverse(
+            "evaluation-unit-grades",
+            kwargs={"cycle_public_id": cycle.public_id, "unit_public_id": unit.public_id},
+        )
+        payload = {
+            "enrolment": enrolment.public_id,
+            "subject": subject.public_id,
+            "teacher": teacher.public_id,
+            "value": 70,
+        }
+        assert auth_client.post(url, payload, content_type="application/json").status_code == 201
+        close_evaluation_unit(unit)
+        close_academic_cycle(cycle=cycle)
+        frozen = FrozenSubjectResult.objects.get(enrolment=enrolment, subject=subject)
+
+        payload["value"] = 90
+        response = auth_client.post(url, payload, content_type="application/json")
+
+        assert response.status_code == 403
+        grade = Grade.objects.get(enrolment=enrolment, subject=subject, evaluation_unit=unit)
+        assert grade.value == 70
+        frozen.refresh_from_db()
+        assert frozen.final_grade == 70
 
 
 class TestGradeAuthorizationAPI:

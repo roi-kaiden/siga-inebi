@@ -71,17 +71,28 @@ async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    method,
-    credentials: "include",
-    headers,
-    body: options.body
-      ? isFormData
-        ? options.body
-        : JSON.stringify(options.body)
-      : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      method,
+      credentials: "include",
+      headers,
+      body: options.body
+        ? isFormData
+          ? options.body
+          : JSON.stringify(options.body)
+        : undefined,
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        "No se pudo conectar con el servidor. Verifica tu conexión y vuelve a intentarlo.",
+        { cause: error }
+      );
+    }
+    throw error;
+  }
 
   return parseResponse(response);
 }
