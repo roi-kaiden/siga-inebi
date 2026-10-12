@@ -8,7 +8,7 @@
 | Administración | Santiago | `docs/manuals/04-administration-manual-instructions.md` | Pendiente | Pendiente | Pendiente | Pendiente |
 | Diccionario de datos | Diana | `docs/manuals/05-final-data-dictionary-instructions.md` | Pendiente | Pendiente | Pendiente | Pendiente |
 | Scripts finales de base de datos | Josué | `docs/manuals/06-final-database-scripts-instructions.md` | Pendiente | Pendiente | Pendiente | Pendiente |
-| API e integraciones | Roí | `docs/manuals/07-api-integrations-documentation-instructions.md` | Pendiente | Pendiente | Pendiente | Pendiente |
+| API e integraciones | Roí | `docs/manuals/07-api-integrations-documentation-instructions.md` | Pendiente de SHA final | Estuardo (pendiente) | Borrador creado | [Manual](../../manuals/07-api-integrations-documentation.md); especificación OpenAPI viva en `/api/v1/schema/`; pendiente revisión cruzada de Estuardo. |
 | Mantenimiento y soporte | Pablo y Daniel | `docs/manuals/08-maintenance-and-support-plan.md` | Pendiente | Pendiente | Borrador creado | Validar contra candidato final. |
 | Respaldo y recuperación | Daniel y Roí | `docs/manuals/09-final-backup-and-recovery-plan-instructions.md` | Pendiente de SHA final | Pendiente | Borrador creado | [Plan](../../manuals/09-final-backup-and-recovery-plan.md); pendiente simulacro vinculado, revisión independiente y confirmación institucional de metas, retención, almacenamiento y cifrado. |
 
