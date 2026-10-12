@@ -69,11 +69,18 @@ describe("FinalGradeWindow — INC-008", () => {
     const dialog = screen.getByRole("dialog", { name: "Consultar resultado" });
     const student = screen.getByRole("combobox", { name: "Estudiante" });
     const subject = screen.getByRole("combobox", { name: "Subarea" });
-    const query = screen.getByRole("button", { name: "Consultar", exact: true });
+    const query = screen.getByRole("button", {
+      name: "Consultar",
+      exact: true,
+    });
     expect(dialog).toContainElement(student);
     expect(query).toBeDisabled();
 
-    for (let step = 0; step < 5 && document.activeElement !== student; step += 1) {
+    for (
+      let step = 0;
+      step < 5 && document.activeElement !== student;
+      step += 1
+    ) {
       await user.tab();
     }
     expect(student).toHaveFocus();
