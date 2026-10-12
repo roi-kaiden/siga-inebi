@@ -138,6 +138,8 @@ def register_scanned_document(
         raise DomainError("Se requiere un estudiante para registrar el documento escaneado.")
     if upload is None:
         raise DomainError("Se requiere adjuntar un documento escaneado.")
+    if actor is not None:
+        _ensure_document_upload_access(actor=actor, student=student)
 
     validated = validate_document_upload(upload)
     payload = upload.read()

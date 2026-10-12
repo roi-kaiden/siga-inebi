@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date, timedelta
 
 import pytest
@@ -7,12 +8,13 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.academics.models import CurriculumPlan
 from apps.academics.services import close_academic_cycle
 from apps.audit.models import AuditEvent
 from apps.documents.field_catalog import FIELD_TAG_CODES
-from apps.documents.models import DocumentRecord, DocumentTemplate
+from apps.documents.models import DocumentDownloadToken, DocumentRecord, DocumentTemplate
 from apps.documents.services import (
     compile_generated_document,
     issue_document_download_token,
@@ -54,9 +56,31 @@ def _items(response):
 
 
 @pytest.mark.security
-@pytest.mark.parametrize("url_name", ["document-template-list-create", "document-field-tag-list"])
-def test_document_endpoints_require_authentication(client, url_name):
-    response = client.get(reverse(url_name))
+@pytest.mark.parametrize(
+    ("method", "url_name", "kwargs"),
+    [
+        ("get", "document-template-list-create", {}),
+        ("get", "document-field-tag-list", {}),
+        ("get", "document-type-list-create", {}),
+        ("get", "document-storage-consumption", {}),
+        ("get", "document-official-issuance-eligibility", {}),
+        ("get", "document-historical-cycle-report", {}),
+        ("get", "document-template-detail", {"public_id": MISSING_UUID}),
+        ("get", "document-template-version-list", {"public_id": MISSING_UUID}),
+        ("post", "document-template-preview", {"public_id": MISSING_UUID}),
+        ("post", "document-record-upload", {}),
+        ("post", "document-record-scan", {}),
+        ("post", "document-record-version-create", {"public_id": MISSING_UUID}),
+        ("get", "document-record-download", {"public_id": MISSING_UUID}),
+        ("post", "document-record-integrity-verify", {"public_id": MISSING_UUID}),
+        ("get", "enrolment-document-record-list", {"enrolment_id": MISSING_UUID}),
+        ("get", "document-type-detail", {"public_id": MISSING_UUID}),
+        ("post", "document-delivery-receipt-create", {}),
+        ("post", "document-batch-compile", {}),
+    ],
+)
+def test_document_endpoints_require_authentication(client, method, url_name, kwargs):
+    response = getattr(client, method)(reverse(url_name, kwargs=kwargs))
 
     assert response.status_code in (401, 403)
 
@@ -175,6 +199,493 @@ def test_secure_document_download_uses_signed_token_and_serves_the_file(client):
     assert response.status_code == 200
     assert response.content == payload
     assert 'attachment; filename="secure-document.pdf"' in response.headers["Content-Disposition"]
+
+
+@pytest.mark.security
+def test_document_download_rejects_missing_token(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"content"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="doc.pdf",
+        storage_key="local/doc.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    response = client.get(reverse("document-record-download", args=[document.public_id]))
+
+    assert response.status_code == 400
+    assert "token" in _detail(response).lower()
+
+
+@pytest.mark.security
+def test_document_download_rejects_invalid_token(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"content"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="doc.pdf",
+        storage_key="local/doc.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    response = client.get(
+        reverse("document-record-download", args=[document.public_id]),
+        {"token": "tampered-token-value"},
+    )
+
+    assert response.status_code == 400
+    assert "no es valido" in _detail(response).lower()
+
+
+@pytest.mark.security
+def test_document_download_rejects_expired_token(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"content"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="doc.pdf",
+        storage_key="local/doc.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    token = issue_document_download_token(actor=user, document=document)
+    DocumentDownloadToken.objects.filter(pk=token.pk).update(
+        expires_at=timezone.now() - timedelta(minutes=10)
+    )
+
+    response = client.get(
+        reverse("document-record-download", args=[document.public_id]),
+        {"token": token.token},
+    )
+
+    assert response.status_code == 400
+    assert "vencio" in _detail(response).lower()
+
+
+@pytest.mark.security
+def test_document_download_rejects_token_of_another_user(client):
+    user_a = UserFactory()
+    user_b = UserFactory()
+    student = StudentFactory()
+    permission = PermissionFactory(codename="document_read")
+    for u in (user_a, user_b):
+        a = RoleAssignmentFactory(user=u, role=RoleFactory(permissions=[permission]))
+        ScopeGrantFactory(assignment=a, student=student)
+    payload = b"content"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="doc.pdf",
+        storage_key="local/doc.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    token = issue_document_download_token(actor=user_a, document=document)
+
+    client.force_login(user_b)
+    response = client.get(
+        reverse("document-record-download", args=[document.public_id]),
+        {"token": token.token},
+    )
+
+    assert response.status_code == 400
+    assert "no corresponde" in _detail(response).lower()
+
+
+@pytest.mark.security
+def test_document_download_token_is_single_use(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"content"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="doc.pdf",
+        storage_key="local/doc.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    token = issue_document_download_token(actor=user, document=document)
+
+    first = client.get(
+        reverse("document-record-download", args=[document.public_id]),
+        {"token": token.token},
+    )
+    assert first.status_code == 200
+
+    second = client.get(
+        reverse("document-record-download", args=[document.public_id]),
+        {"token": token.token},
+    )
+    assert second.status_code == 400
+    assert "no es valido o vencio" in _detail(second).lower()
+
+
+def test_document_record_integrity_verify_success(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"payload to verify"
+    checksum = hashlib.sha256(payload).hexdigest()
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="archivo.pdf",
+        storage_key=f"documents/{student.public_id}/archivo.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=checksum,
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    response = client.post(reverse("document-record-integrity-verify", args=[document.public_id]))
+
+    assert response.status_code == 204
+    assert AuditEvent.objects.filter(
+        action="documents.document.integrity_verified",
+        actor=user,
+        resource_identifier=str(document.pk),
+    ).exists()
+
+
+def test_document_record_integrity_verify_detects_corrupted_payload(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    payload = b"genuine payload"
+    checksum = hashlib.sha256(payload).hexdigest()
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="archivo.pdf",
+        storage_key=f"documents/{student.public_id}/corrupted.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=checksum,
+    )
+    default_storage.save(document.storage_key, ContentFile(b"tampered payload"))
+
+    client.force_login(user)
+    response = client.post(reverse("document-record-integrity-verify", args=[document.public_id]))
+
+    assert response.status_code == 400
+    assert "checksum" in _detail(response).lower()
+
+
+def test_document_record_integrity_verify_requires_scoped_permission(client):
+    user = UserFactory()
+    student = StudentFactory()
+    payload = b"some payload"
+    document = DocumentRecord.objects.create(
+        student=student,
+        filename="archivo.pdf",
+        storage_key=f"documents/{student.public_id}/unauthorized.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(document.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    response = client.post(reverse("document-record-integrity-verify", args=[document.public_id]))
+
+    assert response.status_code == 403
+
+
+def test_document_record_integrity_verify_returns_404_for_unknown_record(client):
+    user = UserFactory(is_superuser=True)
+    client.force_login(user)
+    response = client.post(reverse("document-record-integrity-verify", args=[MISSING_UUID]))
+
+    assert response.status_code == 404
+
+
+def test_document_record_upload_success_and_audited(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_upload")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+
+    file_content = b"%PDF-1.4 official document content"
+    uploaded = SimpleUploadedFile("partida.pdf", file_content, content_type="application/pdf")
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-upload"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["filename"] == "partida.pdf"
+    assert data["version_number"] == 1
+    assert data["status"] == "active"
+    assert data["checksum"] == hashlib.sha256(file_content).hexdigest()
+
+    record = DocumentRecord.objects.get(public_id=data["public_id"])
+    assert AuditEvent.objects.filter(
+        action="documents.document.uploaded",
+        actor=user,
+        resource_identifier=str(record.pk),
+    ).exists()
+
+
+def test_document_record_upload_rejects_disallowed_content_type(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_upload")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+
+    uploaded = SimpleUploadedFile(
+        "script.exe", b"binary content", content_type="application/x-msdownload"
+    )
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-upload"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 400
+    assert "no es admitido" in _detail(response).lower()
+
+
+@override_settings(DOCUMENT_MAX_UPLOAD_SIZE_BYTES=100)
+def test_document_record_upload_rejects_oversized_file(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_upload")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+
+    uploaded = SimpleUploadedFile("large.pdf", b"x" * 200, content_type="application/pdf")
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-upload"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 400
+    assert "excede el tamano maximo" in _detail(response).lower()
+
+
+def test_document_record_upload_requires_scoped_permission(client):
+    user = UserFactory()
+    student = StudentFactory()
+
+    uploaded = SimpleUploadedFile("partida.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-upload"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 403
+
+
+def test_scanned_document_upload_success_and_audited(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_upload")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+
+    file_content = b"%PDF-1.4 scanned document"
+    uploaded = SimpleUploadedFile("scan_doc.pdf", file_content, content_type="application/pdf")
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-scan"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["filename"] == "scan_doc.pdf"
+    assert data["status"] == "active"
+    record = DocumentRecord.objects.get(public_id=data["public_id"])
+    assert AuditEvent.objects.filter(
+        action="documents.scanned_document.registered",
+        actor=user,
+        resource_identifier=str(record.pk),
+    ).exists()
+
+
+def test_scanned_document_upload_requires_scoped_permission(client):
+    user = UserFactory()
+    student = StudentFactory()
+
+    uploaded = SimpleUploadedFile("scan.pdf", b"%PDF-1.4 scan", content_type="application/pdf")
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-scan"),
+        {"student_id": str(student.public_id), "file": uploaded},
+        format="multipart",
+    )
+
+    assert response.status_code == 403
+
+
+def test_document_record_version_create_replaces_active_version_and_preserves_history(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_upload")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+
+    v1_payload = b"%PDF-1.4 version 1 content"
+    record_v1 = DocumentRecord.objects.create(
+        student=student,
+        filename="expediente.pdf",
+        storage_key=f"documents/{student.public_id}/v1.pdf",
+        content_type="application/pdf",
+        size_bytes=len(v1_payload),
+        checksum=hashlib.sha256(v1_payload).hexdigest(),
+        status=DocumentRecord.StorageStatus.ACTIVE,
+        version_number=1,
+    )
+    default_storage.save(record_v1.storage_key, ContentFile(v1_payload))
+
+    v2_payload = b"%PDF-1.4 version 2 content"
+    replacement_file = SimpleUploadedFile(
+        "expediente_v2.pdf", v2_payload, content_type="application/pdf"
+    )
+
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-version-create", args=[record_v1.public_id]),
+        {"file": replacement_file},
+        format="multipart",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["version_number"] == 2
+    assert data["status"] == "active"
+
+    record_v1.refresh_from_db()
+    assert record_v1.status == DocumentRecord.StorageStatus.ARCHIVED
+    assert record_v1.is_active is False
+
+    assert DocumentRecord.objects.filter(pk=record_v1.pk).exists()
+    assert DocumentRecord.objects.filter(public_id=data["public_id"]).exists()
+    assert AuditEvent.objects.filter(
+        action="documents.document.version_created",
+        actor=user,
+    ).exists()
+
+
+def test_document_record_version_create_requires_scoped_permission(client):
+    user = UserFactory()
+    student = StudentFactory()
+    payload = b"%PDF-1.4 content"
+    record = DocumentRecord.objects.create(
+        student=student,
+        filename="expediente.pdf",
+        storage_key=f"documents/{student.public_id}/v1.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+        status=DocumentRecord.StorageStatus.ACTIVE,
+    )
+    default_storage.save(record.storage_key, ContentFile(payload))
+
+    replacement = SimpleUploadedFile("exp_new.pdf", b"%PDF-1.4 v2", content_type="application/pdf")
+    client.force_login(user)
+    response = client.post(
+        reverse("document-record-version-create", args=[record.public_id]),
+        {"file": replacement},
+        format="multipart",
+    )
+
+    assert response.status_code == 403
+
+
+def test_enrolment_document_record_list_returns_records(client):
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    enrolment = _enrolment()
+    enrolment.student = student
+    enrolment.save()
+
+    payload = b"%PDF-1.4 doc"
+    doc = DocumentRecord.objects.create(
+        student=student,
+        enrolment=enrolment,
+        filename="boleta.pdf",
+        storage_key=f"documents/{student.public_id}/b.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    default_storage.save(doc.storage_key, ContentFile(payload))
+
+    client.force_login(user)
+    response = client.get(reverse("enrolment-document-record-list", args=[enrolment.public_id]))
+
+    assert response.status_code == 200
+    items = _items(response)
+    assert len(items) == 1
+    assert items[0]["filename"] == "boleta.pdf"
+
+
+def test_enrolment_document_record_list_requires_scoped_permission(client):
+    user = UserFactory()
+    enrolment = _enrolment()
+
+    client.force_login(user)
+    response = client.get(reverse("enrolment-document-record-list", args=[enrolment.public_id]))
+
+    assert response.status_code == 403
 
 
 def test_document_template_header_ignores_submitted_value_on_create(admin_client, institution):
