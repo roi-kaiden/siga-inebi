@@ -17,6 +17,7 @@ base previas permanecen en los registros.
 | [Recuperación](informe-recuperacion.md) | Restauraciones sintéticas y límites de RPO/RTO |
 | [Manifiesto](manifiesto-version.md) | Identidad verificable de la instantánea evaluada |
 | [Despliegue cloud](despliegue-cloud-qa.md) | RUN-CQ-01: URL, imágenes, revisiones y verificaciones en Cloud Run |
+| [Preparación de usabilidad y UAT de Estuardo](estuardo/preparacion-usabilidad-uat/README.md) | Tareas y formatos listos; sesiones institucionales aún no ejecutadas |
 
 ## Estado al inicio
 
