@@ -253,6 +253,16 @@ Todos requerimientos estan en estado `Planned`. Referencias de issue, diseno det
 
 ## Mantenimiento
 
+### Diagnóstico de interfaz — Estuardo, segunda ronda
+
+La [ronda de navegador RUN-EST-20261012-02](../quality/fase-7/estuardo/ronda-2/README.md)
+registra INC-008 sobre `3a4a8d2d488ea13e69471cc9637a36c81d72f010`:
+RF-RES-002/003 presentan discrepancia entre el valor final de API (60, aprobado)
+y el mostrado por la interfaz (59.5). Se conservan los estados canónicos;
+esta evidencia parcial exige corrección y regresión antes de aceptar el flujo.
+Los [casos detallados](../quality/fase-7/estuardo/ronda-2/casos-resultados.csv)
+incluyen captura permitida, escala, ámbito ajeno y ventana vencida, sin declarar
+cobertura completa ni aceptación de los requisitos vinculados.
 ### Evidencia complementaria de evaluación — Estuardo, ronda 1
 
 El [catálogo inicial de Estuardo](../quality/fase-7/estuardo/catalogo-inicial.csv)
