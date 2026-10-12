@@ -334,3 +334,103 @@ def test_result_trace_endpoint_returns_unit_grades_and_is_audited_as_a_sensitive
     event = AuditEvent.objects.get(action="audit.result_trace.viewed")
     assert event.actor_id == auth_client.user.id
     assert event.context["student_id"] == enrolment.student.pk
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
+def test_audit_event_list_rejects_modifications_with_405(admin_client, method):
+    """RF-BIT-005: la bitacora es inmutable; ningun metodo de modificacion existe en la API."""
+    response = getattr(admin_client, method)(reverse("audit-event-list"))
+    assert response.status_code == 405
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
+def test_audit_event_export_rejects_modifications_with_405(admin_client, method):
+    """RF-BIT-005: la exportacion de bitacora no admite escrituras ni eliminaciones."""
+    response = getattr(admin_client, method)(reverse("audit-event-export"))
+    assert response.status_code == 405
+
+
+def test_reading_enrolment_documents_is_audited_as_sensitive_read(client):
+    """
+    RF-BIT-003 & RNF-AUD-003: consultar el expediente documental de un alumno
+    genera lectura sensible.
+    """
+    user = UserFactory()
+    permission = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(user=user, role=RoleFactory(permissions=[permission]))
+    student = StudentFactory()
+    ScopeGrantFactory(assignment=assignment, student=student)
+    section = SectionFactory()
+    enrolment = create_enrolment(
+        student=student,
+        academic_cycle=section.academic_cycle,
+        grade=section.grade,
+        section=section,
+    )
+
+    client.force_login(user)
+    response = client.get(reverse("enrolment-document-record-list", args=[enrolment.public_id]))
+
+    assert response.status_code == 200
+    event = AuditEvent.objects.filter(action="documents.document.read").latest("created_at")
+    assert event.actor_id == user.id
+    assert event.context["student_id"] == str(student.pk)
+
+
+def test_reading_enrolment_documents_without_scope_is_denied_and_audited(client):
+    """RF-BIT-004: intento denegado de lectura de documentos de alumno ajeno queda registrado."""
+    user = UserFactory()
+    student = StudentFactory()
+    section = SectionFactory()
+    enrolment = create_enrolment(
+        student=student,
+        academic_cycle=section.academic_cycle,
+        grade=section.grade,
+        section=section,
+    )
+
+    client.force_login(user)
+    response = client.get(reverse("enrolment-document-record-list", args=[enrolment.public_id]))
+
+    assert response.status_code == 403
+    event = AuditEvent.objects.filter(action="documents.document.read_denied").latest("created_at")
+    assert event.actor_id == user.id
+    assert event.context["student_id"] == str(student.pk)
+    assert event.context["result"] == "denied"
+
+
+def test_authentication_audit_never_stores_passwords_or_credentials(client):
+    """RNF-AUD-003: ningun evento de auditoria almacena contrasenas ni secretos en texto plano."""
+    user = UserFactory(password="super-secret-password-123")
+    client.post(
+        reverse("auth-login"),
+        {"username": user.username, "password": "super-secret-password-123"},
+        content_type="application/json",
+    )
+
+    for event in AuditEvent.objects.all():
+        assert "super-secret-password-123" not in str(event.context)
+        assert "password" not in event.context
+
+
+def test_document_audit_attribution_persists_after_actor_is_disabled(admin_client, institution):
+    """RF-BIT-007: eventos de documentos conservan atribucion tras desactivar al usuario."""
+    response = admin_client.post(
+        reverse("document-template-list-create"),
+        {"name": "Constancia de notas", "code": "NOTAS"},
+        content_type="application/json",
+    )
+    assert response.status_code == 201
+
+    actor_id = admin_client.user.id
+    actor_username = admin_client.user.username
+
+    admin = UserFactory(is_superuser=True)
+    disable_account(actor=admin, user=admin_client.user, force=True, reason="Baja de personal")
+
+    event = AuditEvent.objects.filter(actor_id=actor_id).first()
+    assert event is not None
+    assert event.actor_id == actor_id
+    assert event.actor_label == actor_username
