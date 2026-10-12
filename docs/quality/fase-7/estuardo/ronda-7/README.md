@@ -1,14 +1,15 @@
 # Ronda 7: consulta de resultado por teclado
 
 Fecha: 12 de octubre de 2026. Corrida `RUN-EST-20261012-07`.
-Código probado: `6f4818f14f1db5edab30308e477a874edf9b7d44`, rama
+Código probado: `1649c98f96d3c52db5280feaaf5982f2cb4158ca`, rama
 `test/estuardo-evaluacion-teclado`, basada en la corrección de INC-008 del
 PR #555. Ejecución asistida de Estuardo; revisión independiente de Roí pendiente.
 
 ## Alcance y resultado
 
 Se añadió y ejecutó una prueba de componente para la ventana «Consultar
-resultado». En jsdom, un usuario de teclado pudo enfocar el selector
+resultado». En jsdom, desde el foco inicial del diálogo se pudo llegar con Tab
+al selector
 «Estudiante», elegir una opción con flechas y Enter, pasar con Tab al selector
 «Subarea», elegirla del mismo modo, pasar con Tab a «Consultar» y activar el
 formulario con Enter. El botón estaba deshabilitado antes de elegir ambas
