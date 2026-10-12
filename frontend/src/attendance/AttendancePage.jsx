@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import AddIcon from "@mui/icons-material/Add";
@@ -52,7 +60,14 @@ import { AttendancePresenceWindow } from "./AttendancePresenceWindow.jsx";
 import { DayStatusProbe } from "./DayStatusProbe.jsx";
 import { JornadaParametersWindow } from "./JornadaParametersWindow.jsx";
 import { ScanCaptureWindow } from "./ScanCaptureWindow.jsx";
-import { SectionClosureWindow } from "./SectionClosureWindow.jsx";
+
+// Keep the optional closure workflow out of the route's initial download.
+// Service callbacks are passed as props so its chunk does not import this route.
+const SectionClosureWindow = lazy(() =>
+  import("./SectionClosureWindow.jsx").then((module) => ({
+    default: module.SectionClosureWindow,
+  }))
+);
 
 const eventColumns = (names) => [
   {
@@ -458,13 +473,24 @@ export function AttendancePage() {
       ) : null}
 
       {showSectionClosure ? (
-        <SectionClosureWindow
-          onClosed={() => {
-            events.refresh();
-            alerts.refresh();
-          }}
-          onClose={() => setShowSectionClosure(false)}
-        />
+        <Suspense
+          fallback={
+            <CircularProgress
+              aria-label="Cargando cierre de seccion"
+              size={24}
+            />
+          }
+        >
+          <SectionClosureWindow
+            previewClosure={attendanceService.previewSectionClosure}
+            submitClosure={attendanceService.closeSection}
+            onClosed={() => {
+              events.refresh();
+              alerts.refresh();
+            }}
+            onClose={() => setShowSectionClosure(false)}
+          />
+        </Suspense>
       ) : null}
     </>
   );
