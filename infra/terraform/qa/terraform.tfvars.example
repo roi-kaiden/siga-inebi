@@ -1,0 +1,9 @@
+project_id = "precise-blend-428821-e0"
+region     = "us-central1"
+# Bootstrap first; use real image digests only after build and push.
+deploy_jobs    = false
+deploy_service = false
+# backend_image  = "us-central1-docker.pkg.dev/PROJECT/siga-inebi-qa/backend@sha256:REAL_DIGEST"
+# frontend_image = "us-central1-docker.pkg.dev/PROJECT/siga-inebi-qa/frontend@sha256:REAL_DIGEST"
+# monthly_budget_usd = 20
+# billing_account_id = "EXISTING-BILLING-ACCOUNT-ID"

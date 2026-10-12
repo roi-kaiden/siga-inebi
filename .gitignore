@@ -69,3 +69,24 @@ uploads/
 # RNF-RES-001: los respaldos contienen datos reales del establecimiento y no se
 # versionan jamas. El directorio se crea con `make backup`.
 backups/
+
+# Raw Phase 7 execution evidence stays local; publish only reviewed references.
+docs/quality/fase-7/evidence/
+
+# Terraform: estado, planes, variables privadas y config del backend pueden
+# contener secretos. Se versionan el lockfile y los *.example.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+backend.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

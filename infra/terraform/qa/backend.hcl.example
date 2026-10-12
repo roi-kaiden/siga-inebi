@@ -1,0 +1,4 @@
+# Bootstrap a dedicated private state bucket separately before init/apply.
+# This file contains no credentials. Replace with the approved actual bucket.
+bucket = "REVIEWED-PRIVATE-TERRAFORM-STATE-BUCKET"
+prefix = "siga-inebi/qa"

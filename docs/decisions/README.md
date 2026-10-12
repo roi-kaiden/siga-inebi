@@ -15,4 +15,5 @@ Registrar decisiones base y condiciones para revisarlas cuando requerimientos ca
 - [ADR-0007 Docker and Local Development Environments](ADR-0007-docker-and-local-environments.md)
 - [ADR-0008 Application Layer Boundaries](ADR-0008-application-layer-boundaries.md)
 - [ADR-0009 Deferred Background Processing](ADR-0009-deferred-background-processing.md)
+- [ADR-0010 Cloud QA](ADR-0010-cloud-qa.md)
 - [Pending Decisions](pending-decisions.md)

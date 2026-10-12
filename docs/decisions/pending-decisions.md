@@ -13,6 +13,7 @@
 | PD-009 | Confirmar si inventario y programa de alimentos entran en roadmap cercano con RF formales | Alcance | Open |
 | PD-010 | Medir tasa pico de porton y operadores concurrentes reales | Rendimiento de asistencia | Open |
 | PD-011 | Acotar la guardia de archivos prohibidos de `pr-validation` a artefactos de datos | CI y contribucion | Open |
+| PD-012 | Elegir respuesta si QA cloud resulta lento o caro: optimizar, ampliar Cloud SQL o cambiar de plataforma | Costo y rendimiento | Open |
 
 ## Notas
 
@@ -28,3 +29,8 @@
   documentacion de la propia herramienta de respaldo que exige `RNF-RES-001`.
   Detalle y ajuste propuesto en `docs/architecture/backup-and-recovery.md`. Se
   deja aparte porque cambiar un control de CI merece su propia revision.
+- **PD-012.** QA corre en Cloud Run con Cloud SQL `db-f1-micro` y HDD
+  (ADR-0010), unos USD 10–12 al mes. Costos, alternativas (Cloudflare + Neon,
+  VM) y orden de optimizacion en
+  `docs/planning/qa-cloud-costos-y-alternativas.md`. Se decide despues de medir
+  el rendimiento sobre ese entorno.
