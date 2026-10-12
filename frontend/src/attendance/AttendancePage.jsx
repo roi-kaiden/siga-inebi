@@ -53,16 +53,32 @@ import { DataTable } from "@ui/table/DataTable.jsx";
 import { MutedCell, NameCell } from "@ui/table/cells.jsx";
 import { PageHeader } from "@ui/layout/PageHeader.jsx";
 import { SectionCard, SectionTableArea } from "@ui/layout/SectionCard.jsx";
-import { CameraPreviewWindow } from "@ui/display/CameraPreviewWindow.jsx";
-
 import { AttendancePercentageProbe } from "./AttendancePercentageProbe.jsx";
-import { AttendancePresenceWindow } from "./AttendancePresenceWindow.jsx";
 import { DayStatusProbe } from "./DayStatusProbe.jsx";
-import { JornadaParametersWindow } from "./JornadaParametersWindow.jsx";
-import { ScanCaptureWindow } from "./ScanCaptureWindow.jsx";
 
-// Keep the optional closure workflow out of the route's initial download.
-// Service callbacks are passed as props so its chunk does not import this route.
+// Los dialogos se descargan cuando el operador los abre. Asi, la ruta inicial
+// de asistencia no paga por modulos de acciones que la mayoria de consultas no
+// necesita, sin cambiar el flujo ni los contratos de cada ventana.
+const AttendancePresenceWindow = lazy(() =>
+  import("./AttendancePresenceWindow.jsx").then(
+    ({ AttendancePresenceWindow: Window }) => ({ default: Window })
+  )
+);
+const CameraPreviewWindow = lazy(() =>
+  import("@ui/display/CameraPreviewWindow.jsx").then(
+    ({ CameraPreviewWindow: Window }) => ({ default: Window })
+  )
+);
+const JornadaParametersWindow = lazy(() =>
+  import("./JornadaParametersWindow.jsx").then(
+    ({ JornadaParametersWindow: Window }) => ({ default: Window })
+  )
+);
+const ScanCaptureWindow = lazy(() =>
+  import("./ScanCaptureWindow.jsx").then(({ ScanCaptureWindow: Window }) => ({
+    default: Window,
+  }))
+);
 const SectionClosureWindow = lazy(() =>
   import("./SectionClosureWindow.jsx").then((module) => ({
     default: module.SectionClosureWindow,
@@ -450,48 +466,50 @@ export function AttendancePage() {
         title="Nuevo movimiento de asistencia"
       />
 
-      {showParameters ? (
-        <JornadaParametersWindow onClose={() => setShowParameters(false)} />
-      ) : null}
+      <Suspense fallback={null}>
+        {showParameters ? (
+          <JornadaParametersWindow onClose={() => setShowParameters(false)} />
+        ) : null}
 
-      {showCamera ? (
-        <CameraPreviewWindow onClose={() => setShowCamera(false)} />
-      ) : null}
+        {showCamera ? (
+          <CameraPreviewWindow onClose={() => setShowCamera(false)} />
+        ) : null}
 
-      {showScan ? (
-        <ScanCaptureWindow
-          onClose={() => setShowScan(false)}
-          onRecorded={() => {
-            events.refresh();
-            alerts.refresh();
-          }}
-        />
-      ) : null}
-
-      {showPresence ? (
-        <AttendancePresenceWindow onClose={() => setShowPresence(false)} />
-      ) : null}
-
-      {showSectionClosure ? (
-        <Suspense
-          fallback={
-            <CircularProgress
-              aria-label="Cargando cierre de seccion"
-              size={24}
-            />
-          }
-        >
-          <SectionClosureWindow
-            previewClosure={attendanceService.previewSectionClosure}
-            submitClosure={attendanceService.closeSection}
-            onClosed={() => {
+        {showScan ? (
+          <ScanCaptureWindow
+            onClose={() => setShowScan(false)}
+            onRecorded={() => {
               events.refresh();
               alerts.refresh();
             }}
-            onClose={() => setShowSectionClosure(false)}
           />
-        </Suspense>
-      ) : null}
+        ) : null}
+
+        {showPresence ? (
+          <AttendancePresenceWindow onClose={() => setShowPresence(false)} />
+        ) : null}
+
+        {showSectionClosure ? (
+          <Suspense
+            fallback={
+              <CircularProgress
+                aria-label="Cargando cierre de seccion"
+                size={24}
+              />
+            }
+          >
+            <SectionClosureWindow
+              onClosed={() => {
+                events.refresh();
+                alerts.refresh();
+              }}
+              onClose={() => setShowSectionClosure(false)}
+              previewClosure={attendanceService.previewSectionClosure}
+              submitClosure={attendanceService.closeSection}
+            />
+          </Suspense>
+        ) : null}
+      </Suspense>
     </>
   );
 }

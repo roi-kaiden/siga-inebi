@@ -52,12 +52,12 @@ export const studentsService = {
   },
   // StudentSerializer intentionally rejects nested `person` writes on update
   // (see backend/apps/students/api/serializers.py), so name/email/phone
-  // edits go to /people/<id>/ while student_code/photo go to
+  // edits go to /people/<public_id>/ while student_code/photo go to
   // /students/<id>/ — the same two-endpoint split used by create.
   update: async (id, { photo, person, ...data }) => {
     if (person) {
-      const { id: personId, ...personData } = person;
-      await apiClient.patch(`/people/${personId}/`, personData);
+      const { public_id: personPublicId, ...personData } = person;
+      await apiClient.patch(`/people/${personPublicId}/`, personData);
     }
     if (Object.keys(data).length > 0) {
       await apiClient.patch(`/students/${id}/`, data);

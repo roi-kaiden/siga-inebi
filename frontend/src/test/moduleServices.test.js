@@ -7,6 +7,9 @@ import { documentsService } from "@documents/documentsService.js";
 import { enrolmentsService } from "@enrolments/enrolmentsService.js";
 import { evaluationService } from "@evaluation/evaluationService.js";
 import { reportingService } from "@reporting/reportingService.js";
+import { studentsService } from "@students/studentsService.js";
+import { teachersService } from "@teachers/teachersService.js";
+import { guardiansService } from "@guardians/guardiansService.js";
 
 const CYCLE = "11111111-1111-1111-1111-111111111111";
 const UNIT = "22222222-2222-2222-2222-222222222222";
@@ -15,6 +18,7 @@ const TEMPLATE = "44444444-4444-4444-4444-444444444444";
 const ALERT = "55555555-5555-5555-5555-555555555555";
 const STUDENT = "66666666-6666-6666-6666-666666666666";
 const SHIFT = "77777777-7777-7777-7777-777777777777";
+const PERSON = "88888888-8888-8888-8888-888888888888";
 
 /**
  * Contratos HTTP de los modulos cuyo backend ya existia y su UI se agrego
@@ -28,6 +32,31 @@ describe("servicios de los modulos", () => {
     vi.spyOn(apiClient, "post").mockResolvedValue({});
     vi.spyOn(apiClient, "patch").mockResolvedValue({});
     vi.spyOn(apiClient, "del").mockResolvedValue(null);
+  });
+
+  describe("edición de personas vinculadas", () => {
+    test("alumno, docente y encargado actualizan a Persona por public_id", async () => {
+      await studentsService.update(1, {
+        person: { public_id: PERSON, first_name: "Ana" },
+      });
+      expect(apiClient.patch).toHaveBeenCalledWith(`/people/${PERSON}/`, {
+        first_name: "Ana",
+      });
+
+      await teachersService.update(2, {
+        person: { public_id: PERSON, phone_number: "5550101" },
+      });
+      expect(apiClient.patch).toHaveBeenCalledWith(`/people/${PERSON}/`, {
+        phone_number: "5550101",
+      });
+
+      await guardiansService.update(3, {
+        person: { public_id: PERSON, email: "ana@example.test" },
+      });
+      expect(apiClient.patch).toHaveBeenCalledWith(`/people/${PERSON}/`, {
+        email: "ana@example.test",
+      });
+    });
   });
 
   describe("cyclesService", () => {

@@ -52,7 +52,7 @@ export function ImageDialog({ alt = "", downloadName, onClose, open, src }) {
         <Button
           component="a"
           download={downloadName || "foto"}
-          href={src}
+          href={src || undefined}
           size="small"
           startIcon={<DownloadIcon fontSize="small" />}
           variant="text"
@@ -66,7 +66,7 @@ export function ImageDialog({ alt = "", downloadName, onClose, open, src }) {
       <Box
         alt={alt}
         component="img"
-        src={src}
+        src={src || undefined}
         sx={{
           display: "block",
           maxWidth: "100%",

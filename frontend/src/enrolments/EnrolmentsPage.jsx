@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
@@ -37,9 +37,26 @@ import { SectionCard } from "@ui/layout/SectionCard.jsx";
 import { EmptyState } from "@ui/feedback/EmptyState.jsx";
 import { MutedCell, NameCell } from "@ui/table/cells.jsx";
 
-import { BulkEnrolmentWindow } from "./BulkEnrolmentWindow.jsx";
-import { EnrolmentDocumentsWindow } from "./EnrolmentDocumentsWindow.jsx";
-import { MovementHistoryWindow } from "./MovementHistoryWindow.jsx";
+// Estos flujos se abren solo por accion explicita. Cargarlos bajo demanda evita
+// que la ruta de matriculas consuma el presupuesto de la pantalla inicial sin
+// cambiar los contratos ni la experiencia de sus ventanas.
+const BulkEnrolmentWindow = lazy(() =>
+  import("./BulkEnrolmentWindow.jsx").then(
+    ({ BulkEnrolmentWindow: Window }) => ({
+      default: Window,
+    })
+  )
+);
+const EnrolmentDocumentsWindow = lazy(() =>
+  import("./EnrolmentDocumentsWindow.jsx").then(
+    ({ EnrolmentDocumentsWindow: Window }) => ({ default: Window })
+  )
+);
+const MovementHistoryWindow = lazy(() =>
+  import("./MovementHistoryWindow.jsx").then(
+    ({ MovementHistoryWindow: Window }) => ({ default: Window })
+  )
+);
 
 const EMPTY_ENROLMENT = {
   student_id: "",
@@ -375,31 +392,33 @@ export function EnrolmentsPage() {
         />
       ) : null}
 
-      {bulkEnrolling ? (
-        <BulkEnrolmentWindow
-          onClose={() => setBulkEnrolling(false)}
-          onCreated={() => {
-            activeList.refresh();
-            if (historyReady) historyList.refresh();
-          }}
-        />
-      ) : null}
+      <Suspense fallback={null}>
+        {bulkEnrolling ? (
+          <BulkEnrolmentWindow
+            onClose={() => setBulkEnrolling(false)}
+            onCreated={() => {
+              activeList.refresh();
+              if (historyReady) historyList.refresh();
+            }}
+          />
+        ) : null}
 
-      {documentsFor ? (
-        <EnrolmentDocumentsWindow
-          enrolment={documentsFor}
-          key={documentsFor.public_id}
-          onClose={() => setDocumentsFor(null)}
-        />
-      ) : null}
+        {documentsFor ? (
+          <EnrolmentDocumentsWindow
+            enrolment={documentsFor}
+            key={documentsFor.public_id}
+            onClose={() => setDocumentsFor(null)}
+          />
+        ) : null}
 
-      {movementStudentId ? (
-        <MovementHistoryWindow
-          key={movementStudentId}
-          onClose={() => setMovementStudentId("")}
-          studentId={movementStudentId}
-        />
-      ) : null}
+        {movementStudentId ? (
+          <MovementHistoryWindow
+            key={movementStudentId}
+            onClose={() => setMovementStudentId("")}
+            studentId={movementStudentId}
+          />
+        ) : null}
+      </Suspense>
     </>
   );
 }

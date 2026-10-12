@@ -74,6 +74,15 @@ export default defineConfig(({ mode }) => {
             "vendor-react": ["react", "react-dom", "react-router-dom"],
             "vendor-mui-core": ["@mui/material", "@mui/material/styles"],
             "vendor-emotion": ["@emotion/react", "@emotion/styled"],
+            // Las ventanas bajo demanda de asistencia comparten estos modulos
+            // con la pagina principal. Sin un limite explicito, Rollup los
+            // asociaba al chunk de AttendancePage y una ventana terminaba
+            // descargando codigo de la pagina que no utiliza.
+            "attendance-shared": [
+              resolvePath("./src/attendance/attendanceService.js"),
+              resolvePath("./src/shared/catalogs/academicCatalogs.js"),
+              resolvePath("./src/shared/utils/format.js"),
+            ],
           },
         },
       },

@@ -172,7 +172,7 @@ export function DocentesPage() {
     const updated = await teachersService.update(editing.id, {
       ...buildPayload(values),
       person: {
-        id: editing.person.public_id,
+        public_id: editing.person.public_id,
         first_name: values.first_name,
         last_name: values.last_name,
         email: values.email,
@@ -386,7 +386,7 @@ export function DocentesPage() {
         downloadName={viewingPhoto?.split("/").pop()}
         onClose={() => setViewingPhoto(null)}
         open={Boolean(viewingPhoto)}
-        src={viewingPhoto ?? ""}
+        src={viewingPhoto}
       />
 
       {creating ? (

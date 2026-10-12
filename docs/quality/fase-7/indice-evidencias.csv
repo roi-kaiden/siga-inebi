@@ -1,4 +1,6 @@
 evidence_id,run_id,path,bytes,sha256,storage,retention_export_status
+EV-PAB-002,RUN-PAB-20261012-04,tmp/phase7/RUN-PAB-20261012-04/summary.json,22763,73c42d2cd43e76d9ff7849d824235ba173f9d221a2511fa857208862dc55fe1d,Local; ignorado por Git,Exportacion externa y retencion pendientes
+EV-PAB-001,RUN-PAB-20261012-02,tmp/phase7/RUN-PAB-20261012-02/summary.json,22763,13c068f266a294864756bc980e07f04dd1938579f46eb4ba3d5d80232805f770,Local; ignorado por Git,Exportacion externa y retencion pendientes
 EV-001,RUN-D1-05,docs/quality/fase-7/evidence/RUN-D1-05/backend/.coverage,94208,0a591df2f3130246c5f387dca775f816fe8dd338c1fc9a9b5985ce63e716d607,Local; ignorado por Git,Exportacion externa y retencion pendientes
 EV-002,RUN-D1-05,docs/quality/fase-7/evidence/RUN-D1-05/backend/.pytest_cache/.gitignore,37,3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd,Local; ignorado por Git,Exportacion externa y retencion pendientes
 EV-003,RUN-D1-05,docs/quality/fase-7/evidence/RUN-D1-05/backend/.pytest_cache/CACHEDIR.TAG,191,37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4,Local; ignorado por Git,Exportacion externa y retencion pendientes

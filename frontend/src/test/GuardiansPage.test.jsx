@@ -193,7 +193,7 @@ describe("GuardiansPage", () => {
       1,
       expect.objectContaining({
         person: {
-          id: "person-31",
+          public_id: "person-31",
           first_name: "Rosa Elvira",
           last_name: "Garcia Lopez",
           email: "rosa@example.test",

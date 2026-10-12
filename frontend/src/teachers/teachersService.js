@@ -23,12 +23,12 @@ export const teachersService = {
   },
   // TeacherSerializer intentionally rejects nested `person` writes on update
   // (see backend/apps/teachers/api/serializers.py), so name/email/phone
-  // edits go to /people/<id>/ while employee_code/specialty/position/photo
+  // edits go to /people/<public_id>/ while employee_code/specialty/position/photo
   // go to /teachers/<id>/ — the same two-endpoint split used by create.
   update: async (id, { photo, person, ...data }) => {
     if (person) {
-      const { id: personId, ...personData } = person;
-      await apiClient.patch(`/people/${personId}/`, personData);
+      const { public_id: personPublicId, ...personData } = person;
+      await apiClient.patch(`/people/${personPublicId}/`, personData);
     }
     if (Object.keys(data).length > 0) {
       await apiClient.patch(`/teachers/${id}/`, data);
