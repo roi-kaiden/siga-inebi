@@ -2,11 +2,17 @@
 
 ## Alcance y limitaciones
 
-Pablo ejecutó la revisión disponible del frontend sobre el SHA
-`0c8f0d396231f46809b95cc088d5f2c557cb919f`. Las pruebas de permisos,
-CSRF, cookies, TLS, auditoría y análisis backend no pudieron realizarse:
-Docker no está disponible y el entorno Python local es incompatible. Por tanto,
-este informe no certifica seguridad de la versión.
+Pablo ejecutó la revisión inicial del frontend sobre el SHA
+`0c8f0d396231f46809b95cc088d5f2c557cb919f`. Santiago repitió los controles
+disponibles el 11 de octubre de 2026 sobre el SHA
+`3bcca08860b07c7086ac11b914a7262e7a68d282`, usando Docker, Python 3.11 y
+PostgreSQL 16. El 12 de octubre Santiago repitió la validación sobre
+`450d0a805c34e779f3d2cd024cff8c2b985e133a`: 158 pruebas backend y 33 pruebas
+frontend dirigidas aprobaron; Bandit y la auditoría backend también aprobaron.
+
+Esta es una línea base local, no la certificación de la versión: siguen
+pendientes la revisión cruzada, la repetición sobre el SHA candidato final y la
+verificación de cookies/TLS en el entorno HTTPS de entrega.
 
 ## Resultado de dependencias frontend
 
@@ -35,12 +41,16 @@ ofrece actualización mayor y requiere revisión, lockfile controlado y regresi�
 | ESLint frontend | Aprobado | EJ-D1-003 |
 | Pruebas frontend | 283 aprobadas; dos advertencias de `src=""` | EJ-D1-003, INC-004 |
 | Build y presupuesto estático | Aprobado | EJ-D1-003 |
-| `npm audit --json` | Fallido: 8 vulnerabilidades | EJ-D1-004, INC-003 |
-| Bandit, pip-audit y pruebas de seguridad backend | Bloqueado por INC-001/INC-002 | EJ-D1-001/EJ-D1-002 |
-| CSRF, cookies, TLS y autorización integrada | No ejecutado | Requiere entorno QA integrado |
+| Identidad, autorización y alcance backend | 158 pruebas aprobadas en PostgreSQL 16 | EJ-D1-008 |
+| Autenticación y sesiones frontend | 33 pruebas aprobadas | EJ-D1-009 |
+| Bandit y `pip-audit` backend | Aprobado; una excepción versionada ignorada | EJ-D1-010 |
+| `npm audit --audit-level=high` | Fallido: 8 vulnerabilidades, reproducido en SHA actual | EJ-D1-011, INC-003 |
+| Configuración de cookies | Revisión estática: sesión `HttpOnly`, `SameSite=Lax` y `Secure` fuera de desarrollo | `backend/config/settings/base.py`; falta entorno de entrega |
+| CSRF y TLS integrados | No ejecutado | Requiere entorno QA HTTPS y SHA candidato confirmado |
 
 ## Conclusión
 
-INC-003 permanece abierta con prioridad P0. La seguridad del candidato no es
-aceptable hasta contar con triage de dependencias, corrección o excepción
-explícita sustentada, y repetir controles sobre entorno backend integrado.
+INC-003 permanece abierta con prioridad P0. La línea base backend ya es
+ejecutable y aprobó los controles dirigidos, pero la seguridad del candidato no
+puede aceptarse hasta contar con triage de dependencias, corrección o excepción
+explícita sustentada, revisión cruzada y repetición en el entorno final HTTPS.
