@@ -58,6 +58,28 @@ describe("CameraPreviewWindow", () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
+  test("restarts the session to request autofocus again", async () => {
+    const user = userEvent.setup();
+    const firstStop = vi.fn();
+    const secondStop = vi.fn();
+    const requestSession = vi
+      .fn()
+      .mockResolvedValueOnce({ stream: { id: "first" }, stop: firstStop })
+      .mockResolvedValueOnce({ stream: { id: "second" }, stop: secondStop });
+    const { unmount } = renderWithRouter(
+      <CameraPreviewWindow onClose={vi.fn()} requestSession={requestSession} />
+    );
+
+    await screen.findByLabelText("Vista previa en vivo de la camara");
+    await user.click(screen.getByRole("button", { name: "Reenfocar cámara" }));
+
+    await waitFor(() => expect(requestSession).toHaveBeenCalledTimes(2));
+    expect(firstStop).toHaveBeenCalledOnce();
+
+    unmount();
+    expect(secondStop).toHaveBeenCalledOnce();
+  });
+
   test.each([
     [CAMERA_ERROR.insecure, /conexion segura/],
     [CAMERA_ERROR.unsupported, /no admite/],

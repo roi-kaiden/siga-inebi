@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import CenterFocusStrongOutlinedIcon from "@mui/icons-material/CenterFocusStrongOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -59,12 +60,21 @@ export function CameraPreviewWindow({
   return (
     <FloatingWindow
       busy={result.status === "loading"}
-      description="Comprueba el encuadre antes de iniciar una lectura. Esta vista no registra movimientos."
+      description="Comprueba el encuadre antes de iniciar una lectura. Si la imagen queda borrosa, usa Reenfocar cámara para reiniciar el autoenfoque sin cerrar esta vista."
       footer={
         <>
           {result.status === "error" ? (
             <Button onClick={retry} variant="contained">
               Reintentar
+            </Button>
+          ) : null}
+          {result.status === "active" ? (
+            <Button
+              onClick={retry}
+              startIcon={<CenterFocusStrongOutlinedIcon />}
+              variant="outlined"
+            >
+              Reenfocar cámara
             </Button>
           ) : null}
           <Button onClick={onClose} variant="text">

@@ -310,6 +310,7 @@ export function AlumnosPage() {
       render: (student) =>
         student.photo ? (
           <Avatar
+            imgProps={{ decoding: "async", loading: "lazy" }}
             src={student.photo}
             sx={{ width: 32, height: 32 }}
             variant="rounded"
