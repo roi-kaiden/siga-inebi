@@ -5,10 +5,11 @@ on:
     branches:
       - develop
       - main
+  # develop runs this suite through deploy-qa.yml, which only deploys when it passes.
   push:
     branches:
-      - develop
       - main
+  workflow_call:
   workflow_dispatch:
 
 permissions:

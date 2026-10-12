@@ -3,7 +3,7 @@ locals {
   apis = toset([
     "run.googleapis.com", "artifactregistry.googleapis.com", "sqladmin.googleapis.com",
     "secretmanager.googleapis.com", "storage.googleapis.com", "iam.googleapis.com",
-    "iamcredentials.googleapis.com", "cloudresourcemanager.googleapis.com",
+    "iamcredentials.googleapis.com", "cloudresourcemanager.googleapis.com", "sts.googleapis.com",
   ])
   labels = { application = "siga-inebi", environment = "qa", managed_by = "terraform" }
   secrets = {

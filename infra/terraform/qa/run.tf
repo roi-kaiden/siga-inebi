@@ -50,6 +50,10 @@ resource "google_cloud_run_v2_job" "maintenance" {
       }
     }
   }
+  # The GitHub Actions deploy owns image updates; Terraform keeps the rest.
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
+  }
   depends_on = [google_project_iam_member.cloudsql,
     google_secret_manager_secret_iam_member.runtime, google_storage_bucket_iam_member.media,
   google_service_account_iam_member.sign_self]
@@ -134,6 +138,15 @@ resource "google_cloud_run_v2_service" "qa" {
         failure_threshold = 24
       }
     }
+  }
+  # The GitHub Actions deploy owns image updates; Terraform keeps the rest.
+  # Cloud Run reports the Cloud SQL mount on the ingress container whichever
+  # container declares it, so the mounts would show a perpetual diff.
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image, template[0].containers[1].image, client, client_version,
+      template[0].containers[0].volume_mounts, template[0].containers[1].volume_mounts,
+    ]
   }
   depends_on = [google_project_iam_member.cloudsql,
     google_secret_manager_secret_iam_member.runtime, google_storage_bucket_iam_member.media,

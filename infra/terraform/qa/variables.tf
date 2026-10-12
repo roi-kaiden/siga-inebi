@@ -67,3 +67,15 @@ variable "billing_account_id" {
     error_message = "Provide billing_account_id when monthly_budget_usd is set."
   }
 }
+
+variable "github_repository" {
+  description = "GitHub repository (owner/name) allowed to deploy QA through Workload Identity Federation."
+  type        = string
+  default     = "siga-inebi/siga-inebi"
+}
+
+variable "deploy_branch" {
+  description = "Only workflows running on this branch receive deploy credentials."
+  type        = string
+  default     = "develop"
+}

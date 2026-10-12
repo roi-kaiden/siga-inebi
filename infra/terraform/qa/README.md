@@ -34,6 +34,31 @@ Copiar `terraform.tfvars.example` a `terraform.tfvars` y `backend.hcl.example` a
 
 Los jobs se ejecutan de forma explícita con `gcloud run jobs execute JOB --region=us-central1 --project=precise-blend-428821-e0 --wait`. Si fallan, la web permanece desactivada; conservar los logs sin secretos y corregir antes de habilitar tráfico. No existe una dependencia Terraform que certifique que esos comandos terminaron con éxito: la habilitación de la web es un paso operativo deliberado.
 
+## Despliegue continuo desde GitHub Actions
+
+Tras la puesta en marcha inicial, `.github/workflows/deploy-qa.yml` (CI/CD QA) despliega QA en cada push a `develop` (y con `workflow_dispatch`, solo sobre `develop`). Primero ejecuta la suite completa de `ci.yml` (lint, pruebas backend y frontend, seguridad, build e integración con Docker); el despliegue depende de ese job y **no corre si cualquier control falla**. Por eso `ci.yml` ya no se dispara por push a `develop`: en esa rama corre dentro de este pipeline. Después el flujo construye los targets `backend` y `frontend` de `Dockerfile.cloud`, los etiqueta con el SHA completo del commit, los sube a `image_repository` y resuelve sus digests. Después actualiza la imagen de `siga-inebi-qa-migrate` y `siga-inebi-qa-seed`, ejecuta **solo** la migración con `--wait` y, si termina con éxito, actualiza el servicio con ambos digests. La siembra recibe la imagen nueva pero el flujo **nunca la ejecuta**. Cierra con una comprobación de `/api/v1/health/database/` y un resumen del job con SHA, digests y revisión lista. Las ejecuciones no se cancelan entre sí: se encolan (`concurrency: deploy-qa`).
+
+Autenticación sin llaves ni secretos de GitHub, mediante Workload Identity Federation (`deploy.tf`):
+
+- Pool `siga-inebi-qa-github` y proveedor OIDC `github-actions` (`https://token.actions.githubusercontent.com`). La condición de confianza exige `assertion.repository == github_repository` **y** `assertion.ref == refs/heads/<deploy_branch>` (por defecto `siga-inebi/siga-inebi` y `develop`). Las PR, otras ramas y los forks no obtienen credenciales.
+- Cuenta `siga-inebi-qa-deployer`, suplantable solo desde ese repositorio. Permisos mínimos: `roles/artifactregistry.writer` sobre el repositorio de imágenes; `roles/run.developer` a nivel de proyecto (gcloud espera operaciones de Cloud Run con alcance de proyecto, por lo que una concesión sobre el recurso no basta); `roles/iam.serviceAccountUser` únicamente sobre la cuenta runtime, para desplegar revisiones que se ejecutan con ella. Sin acceso a secretos, al bucket de estado Terraform ni a la administración de Cloud SQL.
+- El proveedor y la cuenta aparecen como valores literales en el workflow; no son secretos y provienen de los outputs `github_workload_identity_provider` y `github_deployer_service_account`.
+
+Terraform **ignora los cambios de imagen** del servicio y de los jobs (`lifecycle.ignore_changes`), además de `client`/`client_version` que escribe gcloud y los montajes de volumen, porque Cloud Run reporta el montaje de Cloud SQL en el contenedor de ingreso aunque Terraform lo declare en `backend`. `backend_image` y `frontend_image` quedan como imágenes iniciales; una vez activado el flujo, las actualizaciones de imagen pasan por GitHub Actions y Terraform conserva el resto de la configuración.
+
+Orden de puesta en marcha: revisar y aplicar con `terraform apply` el plan que crea el pool, el proveedor, la cuenta deployer y sus permisos **antes** de fusionar el workflow en `develop`; de lo contrario la primera ejecución falla al autenticarse. Confirmar que los valores literales del workflow coinciden con los outputs.
+
+Reversión: volver a ejecutar el workflow no sirve para desplegar un commit anterior, porque siempre construye la cabeza de `develop`. Para regresar a una revisión previa del servicio:
+
+```bash
+gcloud run revisions list --service=siga-inebi-qa --region=us-central1 --project=precise-blend-428821-e0
+gcloud run services update-traffic siga-inebi-qa --to-revisions=REVISION=100 --region=us-central1 --project=precise-blend-428821-e0
+```
+
+La migración ya aplicada no se revierte con el tráfico; evaluar compatibilidad del esquema antes de regresar. Mientras el tráfico esté fijado, las revisiones nuevas no lo reciben; el workflow ejecuta `update-traffic --to-latest` después de cada despliegue para devolverlo a la revisión nueva.
+
+Control de acceso: quien puede fusionar en `develop` puede desplegar en QA. Como medida opcional, un *environment* de GitHub con revisores obligatorios añade una aprobación manual; requiere permisos de administración del repositorio y ajustar la condición de confianza (el `sub` del token cambia a `repo:...:environment:...`, aunque `repository` y `ref` se mantienen).
+
 ## Costos, alertas y retiro
 
 Cloud SQL factura mientras la instancia existe aunque Cloud Run escale a cero. Para `us-central1`, el precio de referencia `db-f1-micro` es aproximadamente **USD 0.0105/h ≈ 7.67/730 h de cómputo**, más disco HDD, backups y otros consumos; confirmar el importe vigente en [precios oficiales de Cloud SQL](https://cloud.google.com/sql/pricing) y la calculadora antes de aplicar. El tipo compartido no incluye la garantía SLA de los tipos dedicados. [Cloud Run](https://cloud.google.com/run/pricing), [Storage](https://cloud.google.com/storage/pricing), Artifact Registry, Secret Manager y logs pueden añadir cargos.

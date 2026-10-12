@@ -1,0 +1,141 @@
+name: CI/CD QA
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: precise-blend-428821-e0
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev/precise-blend-428821-e0/siga-inebi-qa
+  SERVICE: siga-inebi-qa
+  MIGRATE_JOB: siga-inebi-qa-migrate
+  SEED_JOB: siga-inebi-qa-seed
+  # Estos identificadores no son secretos: salen de los outputs de Terraform
+  # (github_workload_identity_provider y github_deployer_service_account).
+  WIF_PROVIDER: projects/997189930810/locations/global/workloadIdentityPools/siga-inebi-qa-github/providers/github-actions
+  DEPLOYER_SA: siga-inebi-qa-deployer@precise-blend-428821-e0.iam.gserviceaccount.com
+
+jobs:
+  # Full CI suite; any failing job blocks the deploy.
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  deploy:
+    name: deploy-qa
+    needs: ci
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push backend image
+        run: |
+          set -euo pipefail
+          docker build --file Dockerfile.cloud --target backend --tag "$REGISTRY/backend:$GITHUB_SHA" .
+          docker push "$REGISTRY/backend:$GITHUB_SHA"
+
+      - name: Build and push frontend image
+        run: |
+          set -euo pipefail
+          docker build --file Dockerfile.cloud --target frontend --tag "$REGISTRY/frontend:$GITHUB_SHA" .
+          docker push "$REGISTRY/frontend:$GITHUB_SHA"
+
+      - name: Resolve image digests
+        id: digests
+        run: |
+          set -euo pipefail
+          backend="$(gcloud artifacts docker images describe "$REGISTRY/backend:$GITHUB_SHA" \
+            --project="$PROJECT_ID" --format='value(image_summary.fully_qualified_digest)')"
+          frontend="$(gcloud artifacts docker images describe "$REGISTRY/frontend:$GITHUB_SHA" \
+            --project="$PROJECT_ID" --format='value(image_summary.fully_qualified_digest)')"
+          test -n "$backend" && test -n "$frontend"
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Update maintenance jobs
+        env:
+          BACKEND_IMAGE: ${{ steps.digests.outputs.backend }}
+        run: |
+          set -euo pipefail
+          # The seed job only gets the new image; this workflow never executes it.
+          for job in "$MIGRATE_JOB" "$SEED_JOB"; do
+            gcloud run jobs update "$job" --image="$BACKEND_IMAGE" \
+              --project="$PROJECT_ID" --region="$REGION" --quiet
+          done
+
+      - name: Run migrations
+        run: |
+          set -euo pipefail
+          gcloud run jobs execute "$MIGRATE_JOB" --wait \
+            --project="$PROJECT_ID" --region="$REGION" --quiet
+
+      - name: Deploy web service
+        env:
+          BACKEND_IMAGE: ${{ steps.digests.outputs.backend }}
+          FRONTEND_IMAGE: ${{ steps.digests.outputs.frontend }}
+        run: |
+          set -euo pipefail
+          # Service-level flags go before --container; later flags apply to that container.
+          gcloud run services update "$SERVICE" \
+            --project="$PROJECT_ID" --region="$REGION" --quiet \
+            --container=frontend --image="$FRONTEND_IMAGE" \
+            --container=backend --image="$BACKEND_IMAGE"
+          # A manual rollback pins traffic to one revision; send it back to the new one.
+          gcloud run services update-traffic "$SERVICE" --to-latest \
+            --project="$PROJECT_ID" --region="$REGION" --quiet
+
+      - name: Smoke check
+        run: |
+          set -euo pipefail
+          url="$(gcloud run services describe "$SERVICE" \
+            --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')"
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$url/api/v1/health/database/"
+
+      - name: Job summary
+        if: always()
+        env:
+          BACKEND_IMAGE: ${{ steps.digests.outputs.backend }}
+          FRONTEND_IMAGE: ${{ steps.digests.outputs.frontend }}
+        run: |
+          set -euo pipefail
+          revision="$(gcloud run services describe "$SERVICE" \
+            --project="$PROJECT_ID" --region="$REGION" \
+            --format='value(status.latestReadyRevisionName)' || echo 'no disponible')"
+          {
+            echo "## Despliegue QA"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "| --- | --- |"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Backend | \`${BACKEND_IMAGE:-no publicado}\` |"
+            echo "| Frontend | \`${FRONTEND_IMAGE:-no publicado}\` |"
+            echo "| Revisión lista | \`${revision}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

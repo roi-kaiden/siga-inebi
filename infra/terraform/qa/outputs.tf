@@ -17,3 +17,11 @@ output "service_url" {
 output "maintenance_jobs" {
   value = { for name, job in google_cloud_run_v2_job.maintenance : name => job.name }
 }
+
+output "github_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.github.name
+}
+
+output "github_deployer_service_account" {
+  value = google_service_account.deployer.email
+}
