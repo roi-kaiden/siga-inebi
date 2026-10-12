@@ -18,11 +18,11 @@ import { WINDOW_WIDTH } from "@ui/layout/windowWidth.js";
 /**
  * Consulta de resultado: nota final de un estudiante en una subarea (RF-RES-001).
  *
- * La nota final es el promedio de las notas de unidad ya registradas; se
+ * La API entrega la nota final redondeada (RF-RES-002); se
  * recalcula ante cualquier corrección mientras el ciclo esté abierto. Una
  * unidad sin nota es "sin calificar", no cero: se distingue con su propia
- * etiqueta y con el conteo de unidades pendientes, igual que el promedio en
- * curso (RF-CAL-003), del que esta consulta reutiliza el mismo cálculo.
+ * etiqueta y con el conteo de unidades pendientes. La vista presenta
+ * final_grade sin repetir el redondeo ni usar el promedio intermedio.
  */
 export function FinalGradeWindow({ cycleId, onClose }) {
   const enrolments = useEnrolmentCatalog();
@@ -59,7 +59,7 @@ export function FinalGradeWindow({ cycleId, onClose }) {
 
   return (
     <FloatingWindow
-      description="Nota final de la subárea: promedio de las notas de unidad registradas hasta ahora."
+      description="Nota final de la subárea: promedio de las notas de unidad registradas, redondeado al entero por el sistema."
       footer={
         <Button onClick={onClose} variant="text">
           Cerrar
@@ -114,7 +114,7 @@ export function FinalGradeWindow({ cycleId, onClose }) {
         {!loading && !error && data ? (
           <Stack gap={0.5}>
             <Typography variant="h4">
-              {data.average != null ? data.average : "Sin calificar"}
+              {data.final_grade != null ? data.final_grade : "Sin calificar"}
             </Typography>
             <Typography color="text.secondary" variant="body2">
               {data.graded_units} de {data.total_units} unidades calificadas
