@@ -9,8 +9,7 @@ PR #555. Ejecución asistida de Estuardo; revisión independiente de Roí pendie
 
 Se añadió y ejecutó una prueba de componente para la ventana «Consultar
 resultado». En jsdom, desde el foco inicial del diálogo se pudo llegar con Tab
-al selector
-«Estudiante», elegir una opción con flechas y Enter, pasar con Tab al selector
+al selector «Estudiante», elegir una opción con flechas y Enter, pasar con Tab al selector
 «Subarea», elegirla del mismo modo, pasar con Tab a «Consultar» y activar el
 formulario con Enter. El botón estaba deshabilitado antes de elegir ambas
 opciones. El servicio simulado recibió los identificadores seleccionados y la
