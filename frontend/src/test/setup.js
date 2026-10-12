@@ -2,13 +2,9 @@ import "@testing-library/jest-dom";
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
-// jsdom does not implement these; FormModal's file-input preview relies on them.
-if (!URL.createObjectURL) {
-  URL.createObjectURL = () => "blob:mock-url";
-}
-if (!URL.revokeObjectURL) {
-  URL.revokeObjectURL = () => {};
-}
+// Keep file previews deterministic even when Vitest exposes Node's native URL.
+URL.createObjectURL = () => "blob:mock-url";
+URL.revokeObjectURL = () => {};
 
 afterEach(() => {
   cleanup();

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from django.test import Client
@@ -145,8 +145,8 @@ def test_activate_cycle_rejects_when_an_active_cycle_exists(admin_client, instit
 def test_activate_cycle_endpoint_rejects_without_assignment_scope(auth_client, institution):
     prepared = AcademicCycleFactory(
         institution=institution,
-        starts_on="2027-01-01",
-        ends_on="2027-12-31",
+        starts_on=date(2027, 1, 1),
+        ends_on=date(2027, 12, 31),
         status=AcademicCycle.CycleStatus.DRAFT,
     )
 

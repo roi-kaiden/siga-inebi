@@ -30,6 +30,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Test forbidden-file policy
+        run: node --test scripts/github/check-forbidden-files.test.mjs
+
       - name: Validate title, body and changed files
         uses: actions/github-script@v7
         with:
@@ -60,26 +63,12 @@ jobs:
               per_page: 100,
             });
 
-            const forbiddenPatterns = [
-              /^\.env$/,
-              /^\.env\.(?!example$).+/,
-              /^.*\.sqlite$/,
-              /^.*\.sqlite3$/,
-              /^db\.sqlite3$/,
-              /^.*\.sql$/,
-              /^.*\.(pem|key|p12|pfx|crt)$/,
-              /^.*(secret|credential|backup|dump).*$/i,
-              /^media\/uploads\//,
-            ];
-
-            const allowedFiles = new Set([
-              ".secrets.baseline",
-            ]);
-
-            const forbidden = files
-              .map((file) => file.filename)
-              .filter((filename) => !allowedFiles.has(filename))
-              .filter((filename) => forbiddenPatterns.some((pattern) => pattern.test(filename)));
+            const { pathToFileURL } = require("node:url");
+            const policyUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/scripts/github/check-forbidden-files.mjs`,
+            ).href;
+            const { forbiddenFiles } = await import(policyUrl);
+            const forbidden = forbiddenFiles(files.map((file) => file.filename));
 
             if (forbidden.length) {
               core.setFailed(`Forbidden files detected: ${forbidden.join(", ")}`);

@@ -24,6 +24,7 @@ version mayor que el servidor; la imagen del backend lo trae fijado (RNF-RES-001
 por el entorno.
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -297,3 +298,188 @@ def test_an_unreadable_manifest_is_treated_as_absent_not_as_fresh(tmp_path):
     ):
         assert latest_manifest(DATABASE_STACK) is None
         assert latest_manifest(FILES_STACK) is None
+
+
+def _drill_fixture(tmp_path):
+    """Respaldos con checksum real y clientes espia, sin tocar PostgreSQL."""
+    media = tmp_path / "source"
+    media.mkdir()
+    (media / "acta.pdf").write_bytes(b"evidencia sintetica")
+    env = {
+        "BACKUP_ROOT": str(tmp_path / "backups"),
+        "MEDIA_ROOT": str(media),
+        "DRILL_MEDIA_ROOT": str(tmp_path / "restored"),
+        "DATABASE_NAME": "source",
+        "DRILL_DATABASE_NAME": "target_drill",
+    }
+    assert _run("backup-files.sh", env=env).returncode == 0
+    directory = tmp_path / "backups" / "database"
+    directory.mkdir()
+    artifact = directory / "db.dump"
+    artifact.write_bytes(b"synthetic dump")
+    manifest = directory / "db.manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "kind": "database",
+                "artifact": "db.dump",
+                "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "database_name": "source",
+                "pg_dump_version": "16.6",
+            },
+            indent=2,
+        )
+    )
+    clients = tmp_path / "clients"
+    clients.mkdir()
+    calls = tmp_path / "calls"
+    for command, response in (("psql", "16.6"), ("pg_restore", "pg_restore (PostgreSQL) 16.6")):
+        executable = clients / command
+        executable.write_text(f'#!/bin/sh\necho "$*" >> "$DRILL_CALLS"\necho "{response}"\n')
+        executable.chmod(0o755)
+    env.update(PATH=f"{clients}:{os.environ['PATH']}", DRILL_CALLS=str(calls))
+    return env, manifest, calls
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        "source",
+        "target",
+        'target";DROP DATABASE source;--_drill',
+        "9target_drill",
+        "á_drill",
+        "x" * 58 + "_drill",
+    ],
+)
+def test_drill_refuses_unsafe_database_names_without_contacting_postgres(tmp_path, name):
+    env, _, calls = _drill_fixture(tmp_path)
+    env["DRILL_DATABASE_NAME"] = name
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert not calls.exists()
+
+
+@pytest.mark.parametrize("source", ["environment", "manifest"])
+def test_drill_refuses_either_database_origin_before_contacting_postgres(tmp_path, source):
+    env, manifest, calls = _drill_fixture(tmp_path)
+    if source == "environment":
+        env["DATABASE_NAME"] = env["DRILL_DATABASE_NAME"]
+    else:
+        data = json.loads(manifest.read_text())
+        data["database_name"] = env["DRILL_DATABASE_NAME"]
+        manifest.write_text(json.dumps(data, indent=2))
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert not calls.exists()
+
+
+@pytest.mark.parametrize("stack", ["database", "files"])
+def test_drill_checks_both_artifacts_before_contacting_postgres(tmp_path, stack):
+    env, _, calls = _drill_fixture(tmp_path)
+    artifact = next(
+        (Path(env["BACKUP_ROOT"]) / stack).glob("*.dump" if stack == "database" else "*.tar.gz")
+    )
+    artifact.write_bytes(b"alterado")
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert "checksum" in result.stderr
+    assert not calls.exists()
+
+
+@pytest.mark.parametrize("source", ["environment", "manifest"])
+def test_drill_refuses_a_storage_alias_before_contacting_postgres(tmp_path, source):
+    env, _, calls = _drill_fixture(tmp_path)
+    alias = tmp_path / "alias"
+    alias.symlink_to(env["MEDIA_ROOT"], target_is_directory=True)
+    env["DRILL_MEDIA_ROOT"] = str(alias)
+    if source == "manifest":
+        env["MEDIA_ROOT"] = str(tmp_path / "other-source")
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert "almacenamiento de origen" in result.stderr
+    assert not calls.exists()
+
+
+@pytest.mark.parametrize("stack", ["database", "files"])
+def test_drill_refuses_invalid_manifests_before_contacting_postgres(tmp_path, stack):
+    env, _, calls = _drill_fixture(tmp_path)
+    manifest = next((Path(env["BACKUP_ROOT"]) / stack).glob("*.manifest.json"))
+    manifest.write_text("{ invalid json")
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert not calls.exists()
+
+
+def test_drill_refuses_an_incompatible_dump_before_dropping_database(tmp_path):
+    env, manifest, calls = _drill_fixture(tmp_path)
+    data = json.loads(manifest.read_text())
+    data["pg_dump_version"] = "17.1"
+    manifest.write_text(json.dumps(data, indent=2))
+    result = _run("recovery-drill.sh", env=env)
+    assert result.returncode != 0
+    assert "version de PostgreSQL incompatible" in result.stderr
+    assert "DROP DATABASE" not in calls.read_text()
+
+
+@pytest.mark.postgres
+def test_drill_restores_both_stacks_into_disposable_destinations(tmp_path):
+    if any(shutil.which(command) is None for command in ("pg_dump", "pg_restore", "psql")):
+        pytest.skip("clientes PostgreSQL no disponibles en este host")
+    env = _database_env(tmp_path / "backups")
+    media = tmp_path / "source"
+    media.mkdir()
+    (media / "acta.pdf").write_bytes(b"evidencia sintetica")
+    drill_name = "siga_recovery_test_drill"
+    env.update(
+        MEDIA_ROOT=str(media),
+        DRILL_MEDIA_ROOT=str(tmp_path / "restored"),
+        DRILL_DATABASE_NAME=drill_name,
+    )
+    backup = _run("backup-database.sh", env=env)
+    if backup.returncode != 0 and "version de PostgreSQL incompatible" in backup.stderr:
+        pytest.skip("cliente de PostgreSQL de otra version mayor que el servidor")
+    assert backup.returncode == 0, backup.stderr
+    assert _run("backup-files.sh", env=env).returncode == 0
+    try:
+        result = _run("recovery-drill.sh", env=env)
+        assert result.returncode == 0, result.stderr
+        assert "dentro del RTO declarado" in result.stdout
+        assert (tmp_path / "restored" / "acta.pdf").read_bytes() == b"evidencia sintetica"
+        query = subprocess.run(  # noqa: S603 - clientes y base desechable fijos
+            [
+                "psql",
+                "--host=" + env["DATABASE_HOST"],
+                "--port=" + env["DATABASE_PORT"],
+                "--username=" + env["DATABASE_USER"],
+                "--dbname=" + drill_name,
+                "-tAc",
+                "SELECT count(*) FROM django_migrations;",
+            ],
+            env={**os.environ, **env},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert query.returncode == 0, query.stderr
+        assert int(query.stdout.strip()) > 0
+        assert (media / "acta.pdf").read_bytes() == b"evidencia sintetica"
+    finally:
+        subprocess.run(  # noqa: S603 - limpieza exclusivamente de base desechable fija
+            [
+                "psql",
+                "--host=" + env["DATABASE_HOST"],
+                "--port=" + env["DATABASE_PORT"],
+                "--username=" + env["DATABASE_USER"],
+                "--dbname=postgres",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-c",
+                f'DROP DATABASE IF EXISTS "{drill_name}";',
+            ],
+            env={**os.environ, **env},
+            capture_output=True,
+            text=True,
+            check=True,
+        )

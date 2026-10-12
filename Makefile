@@ -222,8 +222,9 @@ backup-check:
 # El simulacro restaura la base dentro del contenedor y los archivos en un
 # directorio temporal del host: las dos pilas, por separado, cronometradas.
 recovery-drill:
-	docker compose exec -T --user $(CURRENT_UID) db sh -c \
-	  'BACKUP_ROOT=/backups DATABASE_HOST=localhost DRILL_DATABASE_NAME=$${POSTGRES_DB}_drill \
-	   DATABASE_USER=$$POSTGRES_USER PGPASSWORD=$$POSTGRES_PASSWORD \
+	docker compose run --rm --no-deps --user $(CURRENT_UID) \
+	  -v "$(CURDIR)/scripts/backup:/opt/backup:ro" \
+	  -v "$(abspath $(BACKUP_ROOT)):/backups:ro" backend sh -c \
+	  'BACKUP_ROOT=/backups DRILL_DATABASE_NAME=$${DATABASE_NAME}_drill \
 	   DRILL_MEDIA_ROOT=/tmp/siga-drill-media \
 	   sh /opt/backup/recovery-drill.sh'
