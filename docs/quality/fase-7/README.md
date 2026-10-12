@@ -27,6 +27,9 @@ base previas permanecen en los registros.
 
 ## Índice
 
+Primera ronda de evaluación de Estuardo: [guía, catálogo y evidencias](estuardo/README.md).
+Es un diagnóstico local complementario; no sustituye la aceptación institucional.
+
 | Archivo | Propósito | Responsable |
 | --- | --- | --- |
 | `alcance-y-decisiones.md` | Alcance, dependencias y decisiones que bloquean validación. | Pablo |
