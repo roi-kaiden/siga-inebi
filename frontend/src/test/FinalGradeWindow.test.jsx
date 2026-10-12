@@ -1,4 +1,4 @@
-import { act, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 
@@ -73,7 +73,10 @@ describe("FinalGradeWindow — INC-008", () => {
     expect(dialog).toContainElement(student);
     expect(query).toBeDisabled();
 
-    act(() => student.focus());
+    for (let step = 0; step < 5 && document.activeElement !== student; step += 1) {
+      await user.tab();
+    }
+    expect(student).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     await screen.findByRole("listbox");
     await user.keyboard("{End}{Enter}");
