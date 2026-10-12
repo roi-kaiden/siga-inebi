@@ -230,6 +230,9 @@ SPECTACULAR_SETTINGS = {
     # Un campo de solo lectura nunca es obligatorio en una peticion.
     "COMPONENT_NO_READ_ONLY_REQUIRED": True,
     "SCHEMA_PATH_PREFIX": "/api/v1",
+    # El schema y Swagger UI describen toda la superficie de la API: solo se
+    # sirven a sesiones autenticadas (deny by default, igual que el resto).
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],
     # Pendiente conocido, NO intentar con `ENUM_NAME_OVERRIDES` a secas: cuatro
     # dominios tienen un campo `status`, y drf-spectacular resuelve la colision
     # con nombres por hash (`Status113Enum`, `StatusE41Enum`). Es feo pero es

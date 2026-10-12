@@ -49,7 +49,7 @@ const SAMPLE = [
     id: 1,
     person: {
       ...visibleInstitutionalPerson,
-      id: 11,
+      public_id: "person-11",
       first_name: "Maria Jose",
       last_name: "Lopez Garcia",
       email: "maria@example.test",
@@ -62,7 +62,7 @@ const SAMPLE = [
   {
     id: 2,
     person: {
-      id: 12,
+      public_id: "person-12",
       first_name: "Carlos Enrique",
       last_name: "Ramirez Perez",
       email: "carlos@example.test",
@@ -210,7 +210,7 @@ describe("AlumnosPage", () => {
     studentsServiceMock.create.mockResolvedValue({
       id: 3,
       person: {
-        id: 13,
+        public_id: "person-13",
         first_name: "Nueva",
         last_name: "Alumna",
         email: "",
@@ -284,7 +284,7 @@ describe("AlumnosPage", () => {
     studentsServiceMock.update.mockResolvedValue({
       id: 1,
       person: {
-        id: 11,
+        public_id: "person-11",
         first_name: "Maria Jose",
         last_name: "Lopez Mendez",
         email: "maria@example.test",
@@ -314,7 +314,7 @@ describe("AlumnosPage", () => {
       1,
       expect.objectContaining({
         person: {
-          id: 11,
+          id: "person-11",
           first_name: "Maria Jose",
           last_name: "Lopez Mendez",
           email: "maria@example.test",
@@ -380,7 +380,7 @@ describe("AlumnosPage", () => {
     const guardian = {
       id: 21,
       person: {
-        id: 31,
+        public_id: "person-31",
         first_name: "Rosa",
         last_name: "Garcia",
         email: "rosa@example.test",

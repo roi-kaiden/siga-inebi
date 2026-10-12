@@ -172,7 +172,7 @@ export function DocentesPage() {
     const updated = await teachersService.update(editing.id, {
       ...buildPayload(values),
       person: {
-        id: editing.person.id,
+        id: editing.person.public_id,
         first_name: values.first_name,
         last_name: values.last_name,
         email: values.email,

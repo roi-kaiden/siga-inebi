@@ -51,14 +51,6 @@ export function HomePage() {
             <Button component={RouterLink} to="/login" variant="contained">
               Ingresar al sistema
             </Button>
-            <Button
-              href="/api/v1/docs/"
-              rel="noreferrer"
-              target="_blank"
-              variant="outlined"
-            >
-              Ver API
-            </Button>
           </Stack>
         </Box>
       </SectionCard>

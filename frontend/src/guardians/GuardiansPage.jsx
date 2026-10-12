@@ -154,7 +154,7 @@ export function GuardiansPage() {
   const handleUpdate = async (values) => {
     const updated = await guardiansService.update(editing.id, {
       person: {
-        id: editing.person.id,
+        id: editing.person.public_id,
         first_name: values.first_name,
         last_name: values.last_name,
         email: values.email,

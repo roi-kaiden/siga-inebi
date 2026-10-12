@@ -161,3 +161,17 @@ def test_schema_generation_has_no_errors():
     assert errors == [], "La generacion del schema reporta errores:\n" + "\n".join(
         str(error) for error in errors
     )
+
+
+@pytest.mark.parametrize("url", ["/api/v1/schema/", "/api/v1/docs/"])
+def test_openapi_endpoints_reject_anonymous_requests(client, url):
+    response = client.get(url)
+
+    assert response.status_code in {401, 403}
+
+
+@pytest.mark.parametrize("url", ["/api/v1/schema/", "/api/v1/docs/"])
+def test_openapi_endpoints_serve_authenticated_sessions(auth_client, url):
+    response = auth_client.get(url)
+
+    assert response.status_code == 200
