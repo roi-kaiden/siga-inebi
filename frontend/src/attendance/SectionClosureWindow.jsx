@@ -8,7 +8,6 @@ import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import { attendanceService } from "@attendance/attendanceService.js";
 import { useSectionCatalog } from "@shared/catalogs/academicCatalogs.js";
 import { todayInputValue } from "@shared/utils/format.js";
 import { ConfirmDialog } from "@ui/feedback/ConfirmDialog.jsx";
@@ -48,7 +47,12 @@ function ClosureSummary({ result }) {
 }
 
 /** The UI presents the result; authorization and audit remain in the backend. */
-export function SectionClosureWindow({ onClose, onClosed }) {
+export function SectionClosureWindow({
+  onClose,
+  onClosed,
+  previewClosure,
+  submitClosure,
+}) {
   const sections = useSectionCatalog();
   const [sectionId, setSectionId] = useState("");
   const [eventDate, setEventDate] = useState(todayInputValue);
@@ -68,7 +72,7 @@ export function SectionClosureWindow({ onClose, onClosed }) {
     setError("");
     setCompleted(false);
     try {
-      setResult(await attendanceService.previewSectionClosure(payload));
+      setResult(await previewClosure(payload));
     } catch (requestError) {
       setError(requestError.message);
       setResult(null);
@@ -81,7 +85,7 @@ export function SectionClosureWindow({ onClose, onClosed }) {
     setBusy(true);
     setError("");
     try {
-      const response = await attendanceService.closeSection({
+      const response = await submitClosure({
         ...payload,
         confirmed,
       });

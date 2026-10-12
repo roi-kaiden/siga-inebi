@@ -236,6 +236,29 @@ describe("AttendancePage — captura por escaneo", () => {
 });
 
 describe("AttendancePage — cierre declarado por cobertura", () => {
+  test("abre, cierra y reabre el cierre diferido sin ejecutar operaciones", async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<AttendancePage />);
+
+    expect(
+      screen.queryByRole("dialog", { name: "Cierre declarado por seccion" })
+    ).not.toBeInTheDocument();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await user.click(screen.getByRole("button", { name: "Cerrar seccion" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Cierre declarado por seccion",
+      });
+      await user.click(
+        within(dialog).getAllByRole("button", { name: "Cerrar" })[attempt]
+      );
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    }
+
+    expect(attendanceServiceMock.previewSectionClosure).not.toHaveBeenCalled();
+    expect(attendanceServiceMock.closeSection).not.toHaveBeenCalled();
+  }, 10000);
+
   test("muestra la confirmacion visible antes del cierre por cobertura", async () => {
     attendanceServiceMock.previewSectionClosure.mockResolvedValue({
       section_id: "section-1",
