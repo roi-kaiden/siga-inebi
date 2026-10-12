@@ -245,7 +245,9 @@ describe("AttendancePage — cierre declarado por cobertura", () => {
     ).not.toBeInTheDocument();
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      await user.click(screen.getByRole("button", { name: "Cerrar seccion" }));
+      await user.click(
+        await screen.findByRole("button", { name: "Cerrar seccion" })
+      );
       const dialog = await screen.findByRole("dialog", {
         name: "Cierre declarado por seccion",
       });
