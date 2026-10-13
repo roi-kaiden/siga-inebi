@@ -33,6 +33,8 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 from django.core.management import call_command
 from django.db import connection
@@ -40,6 +42,18 @@ from django.test import override_settings
 from django.utils import timezone
 
 from apps.common.backups import DATABASE_STACK, FILES_STACK, backup_health, latest_manifest
+from apps.common.models import TaskRun
+from apps.documents.services import upload_document_record
+from apps.enrolments.services import create_enrolment
+from tests.factories.academic import AcademicCycleFactory, InstitutionFactory, SectionFactory
+from tests.factories.identity import (
+    PermissionFactory,
+    RoleAssignmentFactory,
+    RoleFactory,
+    ScopeGrantFactory,
+    UserFactory,
+)
+from tests.factories.students import StudentFactory
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
@@ -47,6 +61,8 @@ SCRIPTS = Path(settings.BACKUP_SCRIPTS_DIR)
 
 
 def _run(script, *, env=None, args=()):
+    if shutil.which("sh") is None:
+        pytest.skip("shell sh no disponible en este host")
     merged = {**os.environ, **(env or {})}
     return subprocess.run(  # noqa: S603 - rutas fijas del repositorio, sin shell
         ["sh", str(SCRIPTS / script), *args],
@@ -483,3 +499,148 @@ def test_drill_restores_both_stacks_into_disposable_destinations(tmp_path):
             text=True,
             check=True,
         )
+
+
+# --------------------------------------------------------------------------- #
+# RNF-RES-003 / CP-INT-REC-001: Verificación de integridad documental en recuperación
+# --------------------------------------------------------------------------- #
+
+
+def _setup_uploader_for_student(student):
+    actor = UserFactory()
+    upload_perm = PermissionFactory(codename="document_upload")
+    read_perm = PermissionFactory(codename="document_read")
+    assignment = RoleAssignmentFactory(
+        user=actor,
+        role=RoleFactory(permissions=[upload_perm, read_perm]),
+    )
+    ScopeGrantFactory(assignment=assignment, student=student)
+    return actor
+
+
+def test_post_restore_document_storage_integrity_verifies_all_files_match(tmp_path, settings):
+    """
+    CP-INT-REC-001 / RNF-RES-003: Con base y archivos restaurados en sincronía,
+    el comando automatizado confirma la correspondencia de hashes SHA-256
+    y registra un TaskRun exitoso.
+    """
+    settings.MEDIA_ROOT = tmp_path
+    student = StudentFactory()
+    actor = _setup_uploader_for_student(student)
+
+    upload_document_record(
+        actor=actor,
+        student=student,
+        upload=SimpleUploadedFile("expediente.pdf", b"contenido legitimo", content_type="application/pdf"),
+    )
+
+    call_command("check_document_storage_integrity")
+
+    run = TaskRun.objects.filter(name="check_document_storage_integrity").order_by("-started_at").first()
+    assert run is not None
+    assert run.status == TaskRun.Status.SUCCEEDED
+    assert run.summary["total_checked"] == 1
+    assert run.summary["ok"] == 1
+    assert run.summary["missing"] == 0
+    assert run.summary["corrupted"] == 0
+
+
+def test_post_restore_document_storage_integrity_detects_missing_file_when_storage_desynchronized(tmp_path, settings):
+    """
+    CP-INT-REC-001 / RNF-RES-003: Si la base se restaura pero el almacenamiento
+    pierde un archivo referenciado, el chequeo falla con código 1 y registra
+    el faltante en el TaskRun.
+    """
+    settings.MEDIA_ROOT = tmp_path
+    student = StudentFactory()
+    actor = _setup_uploader_for_student(student)
+
+    doc = upload_document_record(
+        actor=actor,
+        student=student,
+        upload=SimpleUploadedFile("partida.pdf", b"partida nacimiento", content_type="application/pdf"),
+    )
+
+    if default_storage.exists(doc.storage_key):
+        default_storage.delete(doc.storage_key)
+
+    with pytest.raises(SystemExit):
+        call_command("check_document_storage_integrity")
+
+    run = TaskRun.objects.filter(name="check_document_storage_integrity").order_by("-started_at").first()
+    assert run is not None
+    assert run.status == TaskRun.Status.FAILED
+    assert run.summary["missing"] == 1
+    assert run.summary["ok"] == 0
+
+
+def test_post_restore_document_storage_integrity_detects_corrupted_file_with_altered_checksum(tmp_path, settings):
+    """
+    CP-INT-REC-001 / RNF-RES-003: Si un archivo persistido es alterado o corrompido,
+    el chequeo detecta discrepancia de checksum y aborta con código 1.
+    """
+    settings.MEDIA_ROOT = tmp_path
+    student = StudentFactory()
+    actor = _setup_uploader_for_student(student)
+
+    doc = upload_document_record(
+        actor=actor,
+        student=student,
+        upload=SimpleUploadedFile("certificado.pdf", b"certificado original", content_type="application/pdf"),
+    )
+
+    with default_storage.open(doc.storage_key, "wb") as handle:
+        handle.write(b"contenido corrompido")
+
+    with pytest.raises(SystemExit):
+        call_command("check_document_storage_integrity")
+
+    run = TaskRun.objects.filter(name="check_document_storage_integrity").order_by("-started_at").first()
+    assert run is not None
+    assert run.status == TaskRun.Status.FAILED
+    assert run.summary["corrupted"] == 1
+    assert run.summary["ok"] == 0
+
+
+def test_post_restore_document_storage_integrity_scoped_to_institution(tmp_path, settings):
+    """
+    CP-INT-REC-001 / RNF-RES-003: La verificación puede acotarse por institución
+    mediante el parámetro --institution-id.
+    """
+    settings.MEDIA_ROOT = tmp_path
+
+    inst_a = InstitutionFactory()
+    cycle_a = AcademicCycleFactory(institution=inst_a)
+    sec_a = SectionFactory(academic_cycle=cycle_a)
+    student_a = StudentFactory()
+    create_enrolment(student=student_a, academic_cycle=cycle_a, grade=sec_a.offering.grade, section=sec_a)
+    actor_a = _setup_uploader_for_student(student_a)
+
+    upload_document_record(
+        actor=actor_a,
+        student=student_a,
+        upload=SimpleUploadedFile("doc_a.pdf", b"doc institucion a", content_type="application/pdf"),
+    )
+
+    inst_b = InstitutionFactory()
+    cycle_b = AcademicCycleFactory(institution=inst_b)
+    sec_b = SectionFactory(academic_cycle=cycle_b)
+    student_b = StudentFactory()
+    create_enrolment(student=student_b, academic_cycle=cycle_b, grade=sec_b.offering.grade, section=sec_b)
+    actor_b = _setup_uploader_for_student(student_b)
+
+    upload_document_record(
+        actor=actor_b,
+        student=student_b,
+        upload=SimpleUploadedFile("doc_b.pdf", b"doc institucion b", content_type="application/pdf"),
+    )
+
+    call_command("check_document_storage_integrity", institution_id=str(inst_a.public_id))
+
+    run = TaskRun.objects.filter(name="check_document_storage_integrity").order_by("-started_at").first()
+    assert run is not None
+    assert run.status == TaskRun.Status.SUCCEEDED
+    assert run.summary["institution_id"] == str(inst_a.public_id)
+    assert run.summary["total_checked"] == 1
+    assert run.summary["ok"] == 1
+

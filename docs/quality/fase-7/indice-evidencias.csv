@@ -537,3 +537,4 @@ EV-533,RUN-D1-06,docs/quality/fase-7/evidence/RUN-D1-06/logs/python-version.log,
 EV-534,RUN-D1-06,docs/quality/fase-7/evidence/RUN-D1-06/logs/source-files-end.log,32197,c2ab6ec96f125680b0bbf4ebf75aaf64fc9b6c019d65358d6ef78a8b295666b1,Local; ignorado por Git,Exportacion externa y retencion pendientes
 EV-535,RUN-D1-06,docs/quality/fase-7/evidence/RUN-D1-06/logs/source-files.log,32197,c2ab6ec96f125680b0bbf4ebf75aaf64fc9b6c019d65358d6ef78a8b295666b1,Local; ignorado por Git,Exportacion externa y retencion pendientes
 EV-536,RUN-D1-06,docs/quality/fase-7/evidence/RUN-D1-06/summary.json,22913,8d28f7eed1c8ce9db189b9dc289898f521a3544c1dbc89a7773e9343eaa4c137,Local; ignorado por Git,Exportacion externa y retencion pendientes
+EV-ROI-001,RUN-ROI-20261012-01,docs/quality/fase-7/informe-recuperacion.md,9661,533269dc67d1e4d3d66c4bd1ecec4d3649172a8be393d3d0c761e7c69c00ca30,Local; en repositorio,Informe consolidado de recuperación e integridad documental (RNF-RES-001..003)
